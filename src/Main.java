@@ -6,7 +6,11 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.LinkedList;
+import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /*
  * To change this license header, choose License Headers in Project Properties.
@@ -104,6 +108,8 @@ public class Main {
 
                 createUDPListener();
 
+                processQueries();
+
             } catch (Exception ex) {
                 System.out.println("Ex: " + ex);
             }
@@ -148,9 +154,6 @@ public class Main {
         try {
             DatagramSocket datagramSocket = new DatagramSocket(MY_PORT);
 
-            byte[] buffer = new byte[1024];
-            DatagramPacket incomingPacket = new DatagramPacket(buffer, buffer.length);
-
             new Thread(new Runnable() {
 
                 @Override
@@ -158,32 +161,51 @@ public class Main {
                     while (true) {
                         System.out.println("Running");
                         try {
+                            byte[] buffer = new byte[1024];
+                            DatagramPacket incomingPacket = new DatagramPacket(buffer, buffer.length);
                             datagramSocket.receive(incomingPacket);
+
                             String msg = new String(buffer);
                             System.out.println("Received: " + msg);
 
-                            boolean ok = processReceivedMsg(msg);
+                            String[] temp = msg.split(" ");
 
-                            InetAddress IPAddress = incomingPacket.getAddress();
-                            System.out.println("IPAddress: " + IPAddress);
-                            int port = incomingPacket.getPort();
-                            System.out.println("port: " + port);
-                            String reply;
+                            switch (temp[1]) {
+                                case "JOIN":
 
-                            if (ok) {
-                                reply = "0013 JOINOK 0";
-                            } else {
-                                reply = "0016 JOINOK 9999";
+                                    boolean ok = processJoinMsg(msg);
+
+                                    InetAddress IPAddress = incomingPacket.getAddress();
+                                    System.out.println("IPAddress: " + IPAddress);
+                                    int port = incomingPacket.getPort();
+                                    System.out.println("port: " + port);
+                                    String reply;
+
+                                    if (ok) {
+                                        reply = "0013 JOINOK 0";
+                                    } else {
+                                        reply = "0016 JOINOK 9999";
+                                    }
+
+                                    byte[] data = reply.getBytes();
+                                    DatagramPacket replyPacket = new DatagramPacket(data, data.length, IPAddress, port);
+                                    datagramSocket.send(replyPacket);
+                                    break;
+                                case "LEAVE":
+                                    System.out.println("Leaving...");
+                                    break;
+
+                                case "SER":
+                                    System.out.println("Searching...");
+                                    break;
+                                default:
+                                    System.out.println("xx");
+                                    break;
                             }
-
-                            byte[] data = reply.getBytes();
-                            DatagramPacket replyPacket = new DatagramPacket(data, data.length, IPAddress, port);
-                            datagramSocket.send(replyPacket);
 
                         } catch (Exception ex) {
                             System.out.println("Ex: " + ex);
                         }
-
                     }
                 }
             }).start();
@@ -193,8 +215,9 @@ public class Main {
         }
     }
 
-    private boolean processReceivedMsg(String msg) {
-
+    private boolean processJoinMsg(String msg) {
+        String[] temp = msg.split(" ");
+        nodes.add(new Node(temp[2], Integer.parseInt(temp[3])));
         return true;
     }
 
@@ -231,8 +254,44 @@ public class Main {
         }
     }
 
+    private void processQueries() {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter movie name: ");
+        while (scanner.hasNextLine()) {
+            String name = scanner.nextLine();
+            System.out.println(name + " entered");
+
+            try {
+                DatagramSocket datagramSocket = new DatagramSocket();
+
+                String message = "SER " + MY_IP + " " + MY_PORT + " " + name;
+
+                message = "00" + (message.length() + 5) + " " + message;
+
+                byte[] incomingData = new byte[1024];
+                byte[] buffer = message.getBytes();
+
+                for (Node node : nodes) {
+                    System.out.println("Node: " + node);
+                    InetAddress address = InetAddress.getByName(node.getIp());
+                    System.out.println("InetAddress: " + address + ":" + node.getPort());
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, node.getPort());
+                    datagramSocket.send(packet);
+                    System.out.println("message sent");
+
+//                    DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+//                    datagramSocket.receive(incomingPacket);
+//                    String response = new String(incomingPacket.getData());
+//                    System.out.println("Response from server:" + response);
+                }
+
+            } catch (Exception ex) {
+                System.out.println("Ex: " + ex);
+            }
+        }
+    }
+
     public static void main(String[] args) {
         new Main().start();
     }
-
 }

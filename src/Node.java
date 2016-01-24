@@ -14,6 +14,11 @@ public class Node {
     private int port;
     private String username;
 
+    public Node(String ip, int port) {
+        this.ip = ip;
+        this.port = port;
+    }
+
     public Node(String ip, int port, String username) {
         this.ip = ip;
         this.port = port;
