@@ -1,13 +1,19 @@
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,12 +46,17 @@ public class Main {
 
     private LinkedList<Node> nodes = new LinkedList<>();
 
+    private LinkedList<String> movieList;
+
     public Main() {
         MY_PORT = Integer.parseInt("300" + count);
         MY_USERNAME = "Shan123" + count;
     }
 
     private void start() {
+
+        movieList = new LinkedList<>();
+        loadMovies();
 
         boolean connected = createConnection();
 
@@ -113,9 +124,39 @@ public class Main {
             } catch (Exception ex) {
                 System.out.println("Ex: " + ex);
             }
-
         }
+    }
 
+    private void loadMovies() {
+
+        try {
+//            FileReader fileReader = new FileReader(new File("FileNames.txt"));
+            Scanner scanner = new Scanner(new File("FileNames.txt"));
+
+            Random random = new Random();
+
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+//                System.out.println("Line: " + line);
+
+                if (random.nextBoolean()) {
+                    movieList.add(line);
+                }
+            }
+
+            Collections.shuffle(movieList);
+
+            int len = movieList.size() / 2;
+
+            for (int i = 0; i < len; i++) {
+                movieList.remove();
+            }
+
+            System.out.println(movieList);
+
+        } catch (FileNotFoundException ex) {
+            System.out.println("Ex: " + ex);
+        }
     }
 
     private boolean createConnection() {
@@ -170,16 +211,18 @@ public class Main {
 
                             String[] temp = msg.split(" ");
 
+                            InetAddress IPAddress = incomingPacket.getAddress();
+                            System.out.println("IPAddress: " + IPAddress);
+                            int port = incomingPacket.getPort();
+                            System.out.println("port: " + port);
+                            String reply;
+                            DatagramPacket replyPacket;
+                            byte[] data;
+
                             switch (temp[1]) {
                                 case "JOIN":
 
-                                    boolean ok = processJoinMsg(msg);
-
-                                    InetAddress IPAddress = incomingPacket.getAddress();
-                                    System.out.println("IPAddress: " + IPAddress);
-                                    int port = incomingPacket.getPort();
-                                    System.out.println("port: " + port);
-                                    String reply;
+                                    boolean ok = processJoinMsg(temp[2], temp[3]);
 
                                     if (ok) {
                                         reply = "0013 JOINOK 0";
@@ -187,16 +230,65 @@ public class Main {
                                         reply = "0016 JOINOK 9999";
                                     }
 
-                                    byte[] data = reply.getBytes();
-                                    DatagramPacket replyPacket = new DatagramPacket(data, data.length, IPAddress, port);
+                                    data = reply.getBytes();
+                                    replyPacket = new DatagramPacket(data, data.length, IPAddress, port);
                                     datagramSocket.send(replyPacket);
                                     break;
                                 case "LEAVE":
+
                                     System.out.println("Leaving...");
                                     break;
-
                                 case "SER":
                                     System.out.println("Searching...");
+
+                                    LinkedList<String> tempList = new LinkedList<>();
+
+                                    for (String movie : movieList) {
+                                        if (movie.toLowerCase().contains(temp[4].toLowerCase())) {
+                                            tempList.add(movie);
+                                        }
+                                    }
+                                    System.out.println("Temp List: " + tempList);
+
+                                    if (tempList.size() == 0) {
+                                        int hops;
+                                        try {
+                                            hops = Integer.parseInt(temp[5]);
+                                        } catch (Exception e) {
+                                            hops = 0;
+                                        }
+
+                                        if (hops > 0) {
+
+                                        } else {
+                                            reply = "SEROK 0";
+                                            reply = "00" + reply.length() + " " + reply;
+                                            data = reply.getBytes();
+                                            replyPacket = new DatagramPacket(data, data.length, IPAddress, port);
+                                            datagramSocket.send(replyPacket);
+                                        }
+
+                                    } else {
+                                        System.out.println("Sending reply");
+
+                                        reply = "SEROK 0";
+                                        for (int i = 0; i < tempList.size(); i++) {
+                                            reply = reply + " " + tempList.get(i);
+                                        }
+
+                                        reply = reply.length() + " " + reply;
+                                        if (reply.length() > 99) {
+                                            reply = "0" + reply;
+                                        } else if (reply.length() > 9) {
+                                            reply = "00" + reply;
+                                        }
+
+                                        data = reply.getBytes();
+                                        InetAddress address = InetAddress.getByName(temp[2]);
+                                        replyPacket = new DatagramPacket(data, data.length, address, Integer.parseInt(temp[3]));
+                                        datagramSocket.send(replyPacket);
+                                    }
+
                                     break;
                                 default:
                                     System.out.println("xx");
@@ -215,9 +307,13 @@ public class Main {
         }
     }
 
-    private boolean processJoinMsg(String msg) {
-        String[] temp = msg.split(" ");
-        nodes.add(new Node(temp[2], Integer.parseInt(temp[3])));
+    private boolean processJoinMsg(String ip, String port) {
+
+        System.out.println("ip: " + ip);
+        System.out.println("port: " + port);
+        int intPort = Integer.parseInt(port.trim());
+
+        nodes.add(new Node(ip, intPort));
         return true;
     }
 
@@ -279,10 +375,11 @@ public class Main {
                     datagramSocket.send(packet);
                     System.out.println("message sent");
 
-//                    DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
-//                    datagramSocket.receive(incomingPacket);
-//                    String response = new String(incomingPacket.getData());
-//                    System.out.println("Response from server:" + response);
+                    DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+                    datagramSocket.receive(incomingPacket);
+                    String response = new String(incomingPacket.getData());
+                    System.out.println("Response from server:" + response);
+
                 }
 
             } catch (Exception ex) {
