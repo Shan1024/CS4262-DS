@@ -3,28 +3,23 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.SocketException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.Scanner;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
+
 /**
- *
  * @author Shan
  */
 public class Main {
@@ -32,21 +27,31 @@ public class Main {
     private final String SERVER_HOST = "sid.projects.mrt.ac.lk";
     private final int SERVER_PORT = 3000;
 
+    //#############################################################
+    //######################  IMPORTENT  ##########################
+    //#############################################################
+    //
+    //Change this count everytime you run the project :)
+    //
+    //#############################################################
+
     private int count = 2;
 
     private String MY_IP = "localhost";
     private int MY_PORT;
-//            = 300 + count;
+    //            = 300 + count;
     private String MY_USERNAME;
-//    = "Shan123" + count;
+    //    = "Shan123" + count;
     private Socket clientSocket;
 
     private DataOutputStream outToServer;
     private BufferedReader inFromServer;
 
-    private LinkedList<Node> nodes = new LinkedList<>();
+    private LinkedList<Node> routingTable = new LinkedList<>();
 
     private LinkedList<String> movieList;
+
+    private Random random = new Random();
 
     public Main() {
         MY_PORT = Integer.parseInt("300" + count);
@@ -84,16 +89,16 @@ public class Main {
 //                            break;
 //                        case "1":
 //                            node = new Node(temp[3], Integer.parseInt(temp[4]), temp[5]);
-//                            nodes.add(node);
+//                            routingTable.add(node);
 //                            System.out.println("Node: " + node);
 //                            break;
 //                        case "2":
 //                            node = new Node(temp[3], Integer.parseInt(temp[4]), temp[5]);
-//                            nodes.add(node);
+//                            routingTable.add(node);
 //                            System.out.println("Node1: " + node);
 //
 //                            node = new Node(temp[6], Integer.parseInt(temp[7]), temp[8]);
-//                            nodes.add(node);
+//                            routingTable.add(node);
 //                            System.out.println("Node2: " + node);
 //                            break;
 //                        default:
@@ -104,11 +109,23 @@ public class Main {
                     int n = Integer.parseInt(temp[2]);
 
                     if (n > 0) {
+
                         for (int i = 0; i < n; i++) {
                             node = new Node(temp[3 * (i + 1)], Integer.parseInt(temp[3 * (i + 1) + 1]), temp[3 * (i + 1) + 2]);
-                            nodes.add(node);
+                            routingTable.add(node);
                             System.out.println("Node: " + node);
                         }
+
+                        System.out.println("Routing Table initial size: " + routingTable.size());
+
+                        //If the routing table contains more than 2 entries, we should remove the excess entries
+                        Collections.shuffle(routingTable);
+
+                        while (routingTable.size() > 2) {
+                            routingTable.remove();
+                        }
+
+                        System.out.println("Routing Table final size: " + routingTable.size());
                     }
 
                 } catch (Exception e) {
@@ -244,7 +261,7 @@ public class Main {
                                     LinkedList<String> tempList = new LinkedList<>();
 
                                     for (String movie : movieList) {
-                                        if (movie.toLowerCase().contains(temp[4].toLowerCase())) {
+                                        if (movie.toLowerCase().trim().contains(temp[4].toLowerCase().trim())) {
                                             tempList.add(movie);
                                         }
                                     }
@@ -313,7 +330,7 @@ public class Main {
         System.out.println("port: " + port);
         int intPort = Integer.parseInt(port.trim());
 
-        nodes.add(new Node(ip, intPort));
+        routingTable.add(new Node(ip, intPort));
         return true;
     }
 
@@ -331,7 +348,7 @@ public class Main {
             byte[] incomingData = new byte[1024];
             byte[] buffer = message.getBytes();
 
-            for (Node node : nodes) {
+            for (Node node : routingTable) {
                 System.out.println("Node: " + node);
                 InetAddress address = InetAddress.getByName(node.getIp());
                 System.out.println("InetAddress: " + address + ":" + node.getPort());
@@ -351,41 +368,49 @@ public class Main {
     }
 
     private void processQueries() {
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter movie name: ");
-        while (scanner.hasNextLine()) {
-            String name = scanner.nextLine();
-            System.out.println(name + " entered");
 
-            try {
-                DatagramSocket datagramSocket = new DatagramSocket();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
 
-                String message = "SER " + MY_IP + " " + MY_PORT + " " + name;
+                Scanner scanner = new Scanner(System.in);
+                System.out.print("Enter movie name: ");
+                while (true) {
+                    String name = scanner.nextLine();
+                    System.out.println(name + " entered");
 
-                message = "00" + (message.length() + 5) + " " + message;
+                    try {
+                        DatagramSocket datagramSocket = new DatagramSocket();
 
-                byte[] incomingData = new byte[1024];
-                byte[] buffer = message.getBytes();
+                        String message = "SER " + MY_IP + " " + MY_PORT + " " + name;
 
-                for (Node node : nodes) {
-                    System.out.println("Node: " + node);
-                    InetAddress address = InetAddress.getByName(node.getIp());
-                    System.out.println("InetAddress: " + address + ":" + node.getPort());
-                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, node.getPort());
-                    datagramSocket.send(packet);
-                    System.out.println("message sent");
+                        message = "00" + (message.length() + 5) + " " + message;
 
-                    DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
-                    datagramSocket.receive(incomingPacket);
-                    String response = new String(incomingPacket.getData());
-                    System.out.println("Response from server:" + response);
+                        byte[] incomingData = new byte[1024];
+                        byte[] buffer = message.getBytes();
 
+                        for (Node node : routingTable) {
+                            System.out.println("Node: " + node);
+                            InetAddress address = InetAddress.getByName(node.getIp());
+                            System.out.println("InetAddress: " + address + ":" + node.getPort());
+                            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, node.getPort());
+                            datagramSocket.send(packet);
+                            System.out.println("message sent");
+
+//                            DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+//                            datagramSocket.receive(incomingPacket);
+//                            String response = new String(incomingPacket.getData());
+//                            System.out.println("Response from server:" + response);
+
+                        }
+
+                    } catch (Exception ex) {
+                        System.out.println("Ex: " + ex);
+                    }
                 }
-
-            } catch (Exception ex) {
-                System.out.println("Ex: " + ex);
             }
-        }
+        }).start();
+
     }
 
     public static void main(String[] args) {
